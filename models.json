@@ -1,0 +1,6 @@
+{
+    "selected_model": "Phi-3-mini-4k-instruct-q4_1.gguf",
+    "model_path": "D:/agentic-rag/models/Phi-3-mini-4k-instruct-q4_1.gguf",
+    "download_url": "https://huggingface.co/STiFLeR7/Phi-3-mini-4k-gguf/resolve/main/Phi-3-mini-4k-instruct-q4_1.gguf",
+    "description": "Phi-3 Mini 4K Instruct (Q4_1 Quantization) - Fits RTX 3050 6GB"
+}

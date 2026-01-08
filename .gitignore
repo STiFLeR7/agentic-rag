@@ -1,0 +1,6 @@
+/models
+.pytest_cache
+__pycache__
+debug_agent.log
+docs/work.txt
+docs/dify_comparison.md

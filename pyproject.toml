@@ -1,0 +1,24 @@
+[project]
+name = "agentic-rag"
+version = "0.1.0"
+description = "Agentic Retrieval-Augmented Generation on Constrained Hardware (RTX 3050)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "chromadb",
+    "llama-cpp-python", 
+    "pydantic",
+    "rich",
+    "typer",
+    "matplotlib",
+    "seaborn"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_rag"]
