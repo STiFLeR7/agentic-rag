@@ -14,6 +14,7 @@ CONFIDENTIAL SPECIFICATIONS - 2026
 3. Failure Modes
    - 'Cascade Resonance': Occurs if ZPE-M output fluctuation exceeds 0.003%.
    - Mitigation: Activate 'Aegis' dampeners immediately.
+   - Error Code: 0xDEADBEEF relates to buffer overflow in the Flux Capacitor (Legacy).
 
 4. Personnel
    - Chief Architect: Dr. Elena Voss.

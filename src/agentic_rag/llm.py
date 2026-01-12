@@ -1,44 +1,42 @@
+
 import os
+import requests
+import json
 from typing import Optional, List, Dict, Any
 from llama_cpp import Llama
-from pydantic import BaseModel
-
-class CompletionRequest(BaseModel):
-    prompt: str
-    max_tokens: int = 256
-    stop: Optional[List[str]] = None
-    temperature: float = 0.7
-
-class InferenceEngine:
-    """
-    Wrapper around llama-cpp-python to handle model loading and inference 
-    with tracking for VRAM and latency managed externally or internally.
-    """
-
-import os
-import google.generativeai as genai
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("d:/agentic-rag/.env")
 
 class InferenceEngine:
     """
-    Wrapper around llama-cpp-python to handle model loading and inference 
-    with tracking for VRAM and latency managed externally or internally.
-    Falls back to Gemini Flash if local model fails.
+    Wrapper around llama-cpp-python to handle model loading and inference.
+    Falls back to Gemini 2.0 Flash (REST) if local model fails or is forced.
     """
-    def __init__(self, model_path: str, n_ctx: int = 4096, n_gpu_layers: int = -1):
+    def __init__(self, model_path: str, n_ctx: int = 4096, n_gpu_layers: int = -1, force_gemini: bool = False):
         self.model_path = model_path
         self.n_ctx = n_ctx
         self.n_gpu_layers = n_gpu_layers
         self.llm = None
         self.use_fallback = False
+        self.gemini_key = None
         
-        try:
-             self._load_model()
-        except Exception as e:
-            print(f"CRITICAL: Failed to load local model ({e}). Switching to Gemini Fallback.")
-            self._setup_fallback()
+        # Load API Key immediately
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        if not self.gemini_key:
+             print("Warning: GEMINI_API_KEY not found in .env")
+
+        if force_gemini:
+            print("Forcing Gemini Usage (REST Mode).")
+            self.use_fallback = True
+            if not self.gemini_key:
+                 raise ValueError("Force Gemini requested but no API Key available.")
+        else:
+            try:
+                self._load_model()
+            except Exception as e:
+                print(f"CRITICAL: Failed to load local model ({e}). Switching to Gemini Fallback.")
+                self.use_fallback = True
 
     def _load_model(self):
         if not os.path.exists(self.model_path):
@@ -54,98 +52,78 @@ class InferenceEngine:
         )
         print("Model loaded.")
 
-    def _setup_fallback(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            print("ERROR: GEMINI_API_KEY not found in .env. Fallback unusable.")
-            raise RuntimeError("No Local Model and No Gemini Key.")
-        
-        genai.configure(api_key=api_key)
-        self.fallback_model = genai.GenerativeModel('gemini-1.5-flash')
-        self.use_fallback = True
-        print("Gemini Fallback Active (gemini-1.5-flash).")
-
     def chat(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """
-        Chat completion using llama-cpp's built-in chat handler or Gemini Fallback.
+        Chat completion using local Llama or Gemini Fallback.
         """
         if self.use_fallback:
             return self._chat_gemini(messages, **kwargs)
             
-        # Default stop tokens if not provided
+        # Default stop tokens
         stop = kwargs.pop("stop", ["<|end|>", "Observation:"])
         
         try:
             output = self.llm.create_chat_completion(
                 messages=messages,
-                max_tokens=512, # Default cap
+                max_tokens=1024,
                 stop=stop,
                 **kwargs
             )
             return output
         except Exception as e:
             print(f"Error during local inference: {e}. Switching to Fallback.")
-            self._setup_fallback()
+            self.use_fallback = True
             return self._chat_gemini(messages, **kwargs)
 
     def _chat_gemini(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        # Convert ChatML style messages to Gemini history
-        # Gemini expects structure: contents=[{'role': 'user', 'parts': [...]}]
-        # Local: [{'role': 'user', 'content': '...'}]
+        """
+        Uses Gemini via REST API (v1beta) targeting gemini-2.0-flash-exp.
+        """
+        if not self.gemini_key:
+             return {"choices": [{"message": {"content": "Error: No Gemini API Key"}}]}
         
-        gemini_history = []
-        system_instruction = None
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={self.gemini_key}"
         
+        # Convert messages to Gemini Content
+        contents = []
         for m in messages:
-            role = m['role']
-            content = m['content']
+            role = "model" if m['role'] == "assistant" else "user"
+            # Merge system into user or prepend? Gemini 2.0 supports system instructions but REST payload is specific.
+            # Simpler: Just map content.
+            contents.append({
+                "role": role,
+                "parts": [{"text": m['content']}]
+            })
             
-            if role == 'system':
-                system_instruction = content
-            elif role == 'user':
-                gemini_history.append({'role': 'user', 'parts': [content]})
-            elif role == 'assistant':
-                gemini_history.append({'role': 'model', 'parts': [content]})
-                
-        # Handle current query (last user message)
-        # Note: genai.ChatSession handles history, but here we are stateless "chat" wrapper.
-        # We'll validly construct a chat with history excluding the last one, then send message.
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": kwargs.get("temperature", 0.7),
+                "maxOutputTokens": 1024
+            }
+        }
         
-        if not gemini_history:
-             return {"choices": [{"message": {"content": "Error: No messages."}}]}
-             
-        last_msg = gemini_history[-1]
-        if last_msg['role'] == 'user':
-             prompt_parts = last_msg['parts']
-             history = gemini_history[:-1]
-        else:
-             # Should not happen in standard flow (last is user)
-             prompt_parts = ["Continue."]
-             history = gemini_history
-
         try:
-             model = self.fallback_model
-             if system_instruction:
-                 # Re-init with system instruction if needed? 
-                 # Gemini 1.5 supports system_instruction argument in GenerativeModel constructor
-                 # But we initialized it once. Let's send it as context in first message if needed.
-                 # Or just re-instantiate.
-                 model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_instruction)
-             
-             chat = model.start_chat(history=history)
-             response = chat.send_message(prompt_parts[0])
-             
-             return {
-                 "choices": [
-                     {
-                         "message": {
-                             "role": "assistant",
-                             "content": response.text
-                         }
-                     }
-                 ],
-                 "usage": {"total_tokens": 0} # Dummy
-             }
-        except Exception as e:
-             return {"choices": [{"message": {"content": f"Error in Gemini Fallback: {e}"}}]}
+            response = requests.post(url, headers={"Content-Type": "application/json"}, json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                if "candidates" in data and data["candidates"]:
+                    content = data["candidates"][0]["content"]["parts"][0]["text"]
+                    return {"choices": [{"message": {"content": content}}]}
+                else:
+                    return {"choices": [{"message": {"content": f"Error: Empty Gemini Response: {data}"}}]}
+            else:
+                 # Fallback to 1.5-flash if 2.0 fails (e.g. 404)
+                if response.status_code == 404:
+                     print("Gemini 2.0 not found (404), trying 1.5-flash...")
+                     url_15 = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
+                     response = requests.post(url_15, headers={"Content-Type": "application/json"}, json=payload)
+                     if response.status_code == 200:
+                        data = response.json()
+                        if "candidates" in data and data["candidates"]:
+                            content = data["candidates"][0]["content"]["parts"][0]["text"]
+                            return {"choices": [{"message": {"content": content}}]}
 
+                return {"choices": [{"message": {"content": f"Error Gemini API {response.status_code}: {response.text}"}}]}
+        except Exception as e:
+            return {"choices": [{"message": {"content": f"Error calling Gemini REST: {e}"}}]}

@@ -53,30 +53,29 @@ class Agent:
         self.graph = builder.compile()
 
     def _default_prompt(self) -> str:
-        return f"""You are a Function Calling Engine.
-You have access to a local knowledge base.
-You are NOT a chat assistant. You are a process that retrieves data.
+        return f"""You are a Retrieve-Then-Answer Engine.
+You have access to a confidential knowledge base about 'Project Orion'.
+You do NOT know anything about Project Orion internally (ignore real-world history).
+You MUST use the 'search_knowledge_base' tool to find answers.
 
 TOOLS:
 {self.tools.get_descriptions()}
 
-INSTRUCTIONS:
-1. You must output an 'Action' to find the answer.
-2. You must NOT apologize or refuse.
-3. You must NOT say "I cannot".
-4. Format:
+RULES:
+1. ALWAYS output an 'Action' first.
+2. Do NOT answer without searching.
+3. Format:
 Action: <tool_name>
 Action Input: <json_params>
 
 Example:
-User: Status?
+User: Who is the lead?
 Action: search_knowledge_base
-Action Input: "{{"query": "status"}}"
-Observation: OK
-Final Answer: OK
+Action Input: "{{"query": "lead"}}"
+Observation: ...
+Final Answer: ...
 
-Begin.
-"""
+Begin."""
 
     def rewrite_query(self, state: AgentState) -> Dict:
         """
@@ -225,10 +224,19 @@ Rewritten: "What is the current status of Project Orion?"
                         elif tool_name == "read_file":
                             tool_input = {"file_path": str(tool_input)}
 
-                tool = self.tools.get(tool_name)
                 if tool:
                     print(f"Executing {tool_name} with {tool_input}...")
-                    observation = tool.execute(**tool_input)
+                    raw_result = tool.execute(**tool_input)
+                    
+                    # Format for LLM if it's a list (Retrieval results)
+                    if isinstance(raw_result, list):
+                        observation = "Found specific documents:\n"
+                        for i, doc in enumerate(raw_result):
+                             # Robustly handle dict or string
+                             content = doc.get('content', str(doc)) if isinstance(doc, dict) else str(doc)
+                             observation += f"[{i+1}] {content}\n"
+                    else:
+                        observation = str(raw_result)
                 else:
                     observation = f"Error: Tool '{tool_name}' not found."
             except Exception as e:

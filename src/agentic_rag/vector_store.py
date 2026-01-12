@@ -48,7 +48,14 @@ class VectorStore:
         """
         Dangerous: clears all data in collection.
         """
-        # IDs are needed to delete? No, can delete by where. here we just want to wipe.
-        # fast way: delete the collection and recreate
         self.client.delete_collection(self.collection.name)
         self.collection = self.client.get_or_create_collection(self.collection.name)
+
+    def get_all_docs(self) -> List[str]:
+        """
+        Returns all document contents for building BM25 index.
+        """
+        # .get() returns dict with 'ids', 'documents', 'metadatas'
+        result = self.collection.get()
+        return result['documents'] if result and 'documents' in result else []
+

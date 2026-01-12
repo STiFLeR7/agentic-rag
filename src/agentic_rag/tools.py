@@ -1,5 +1,5 @@
 
-from typing import Protocol, Dict, Any, List
+from typing import Protocol, Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 import os
 from agentic_rag.retriever import Retriever
