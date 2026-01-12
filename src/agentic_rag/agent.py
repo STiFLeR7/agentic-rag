@@ -5,10 +5,11 @@ import operator
 import json
 import logging
 
+
 # Setup Logger
 logging.basicConfig(filename='d:/agentic-rag/debug_agent.log', level=logging.INFO, format='%(asctime)s %(message)s')
 
-from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage, messages_to_dict, messages_from_dict
 from langgraph.graph import StateGraph, END
 
 from agentic_rag.llm import InferenceEngine
@@ -237,16 +238,54 @@ Rewritten: "What is the current status of Project Orion?"
         # Return as HumanMessage to prompt next step
         return {"messages": [HumanMessage(content=f"Observation: {observation}")]}
 
+
     def run(self, query: str, max_steps: int = 5) -> str: # max_steps is handled by recursion_limit in LangGraph usually
         # Initial State
         # Rewriter will handle enhancement
         
-        inputs = {"messages": [SystemMessage(content=self.system_prompt), HumanMessage(content=query)]}
+        # Load previous memory if available
+        initial_messages = self._load_memory()
+        if not initial_messages:
+             initial_messages = [SystemMessage(content=self.system_prompt)]
+        
+        initial_messages.append(HumanMessage(content=query))
+             
+        inputs = {"messages": initial_messages}
         
         # Execute Graph
         config = {"recursion_limit": max_steps * 2} # *2 because distinct User/Asst steps
         try:
             final_state = self.graph.invoke(inputs, config=config)
+            
+            # Save memory
+            self._save_memory(final_state['messages'])
+            
             return final_state['messages'][-1].content
         except Exception as e:
             return f"Error: {e}"
+
+    def _save_memory(self, messages: List[BaseMessage]):
+        import json
+        file_path = "d:/agentic-rag/agent_memory.json"
+        try:
+            data = messages_to_dict(messages)
+            with open(file_path, "w") as f:
+                json.dump(data, f, indent=2)
+            logging.info("Memory saved to agent_memory.json")
+        except Exception as e:
+            logging.error(f"Failed to save memory: {e}")
+
+    def _load_memory(self) -> List[BaseMessage]:
+        import json
+        import os
+        file_path = "d:/agentic-rag/agent_memory.json"
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+                logging.info("Memory loaded from agent_memory.json")
+                return messages_from_dict(data)
+            except Exception as e:
+                logging.error(f"Failed to load memory: {e}")
+                return []
+        return []
