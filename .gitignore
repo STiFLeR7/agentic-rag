@@ -3,4 +3,5 @@
 __pycache__
 debug_agent.log
 docs/work.txt
-docs/dify_comparison.md
+docs/dify_comparison.models
+.env
