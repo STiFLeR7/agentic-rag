@@ -1,0 +1,14 @@
+[
+  {
+    "question": "What is the core architecture of the QTP-X system?",
+    "answer": "Hyper-State entanglement bus running at 4.2 Tera-qubits per second.",
+    "score": 1.0,
+    "reasoning": "Parse Error"
+  },
+  {
+    "question": "What are the key technological advancMs of the QTP-X system's core architecture?",
+    "answer": "The QTP-X system's core architecture features a 'Hyper-State' entanglement bus capable of running at 4.2 Tera-qubits per second, representing a significant advancement in quantum computing by enabling faster and more complex quantum entanglements. Additionally, the 'Chronos' latency compensation mechanism is a novel approach to reducing packet loss by predicting state collapse 12ms into the future, which could greatly enhance the reliability and efficiency of quantum communications.",
+    "score": 1.0,
+    "reasoning": "Parse Error"
+  }
+]

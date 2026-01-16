@@ -18,6 +18,8 @@
 
 > **Comparison**: While the baseline model hallucinates wildly on technical queries (e.g., confusing "Project Orion" with the 1950s nuclear project), the **Agentic RAG** system achieves near-perfect retrieval by leveraging self-correction and semantic search.
 
+![Baseline vs RAG](docs/metrics_neon_line.png)
+
 ---
 
 ## 🧠 System Architecture
@@ -54,10 +56,50 @@ We moved beyond simple vectors to a **Hybrid 2-Stage Pipeline** that beats dense
 
 ![Metrics](docs/metrics_v2_compare.png)
 
-### 3. Resilience & Fallback
-*   **Hybrid Inference**: The `InferenceEngine` attempts to load the local GGML/GGUF model.
-*   **Cloud Fallback**: If the local stack fails (OOM or Crash), it seamlessly hot-swaps to **Google Gemini 2.0 Flash** (via REST API), preserving system uptime.
-*   **Persistent Memory**: `AgentState` is serialized to JSON (`agent_memory.json`) after every interaction, enabling long-lived sessions.
+### 3. The Omni-Corpus Engine (Phase 7 - Verified)
+We solved the "Context Fragmentation" problem inherent in standard Chunk-based RAG using a **Small-to-Big Retrieval Implementation**:
+
+#### Strategy of RAG Ingestion
+1.  Split full text into **'Parent' chunks** (large).
+2.  Split each Parent into **'Child' chunks** (small).
+3.  Assign **Parent ID** to Children.
+4.  Return **ONLY Children** for vectorization, but with `parent_content` in metadata?
+    *   **NO**. Storing parent content in metadata Bloats ChromaDB.
+    *   **Better**: Store Parent Content in a separate doc store (key-value), and just put `parent_id` in Child Metadata.
+
+**Retrieval Logic**:
+*   *Query* -> *Vector Match Child* -> *Resolve Parent ID* -> *Return Full Parent Context*.
+*   **Result**: The LLM sees the code snippet `998877` **AND** the surrounding paragraph explaining it opens the "Vault", eliminating ambiguity.
+
+### 4. Auto-Evaluation Dataset (Phase 8)
+To objectively measure performance without human bias, we built a synthetic dataset generator using the **Generation-Critique Pipeline**:
+*   **Generator**: `Gemini 2.0 Flash` (via REST) or `Phi-3` (Local Fallback) reads the corpus and creates fact-based Q/A pairs.
+*   **Critique**: A second LLM pass scores each pair (1-5) on "Groundedness" and "Standalone-ness".
+*   **Result**: A "Gold Standard" JSON dataset (`data/project_orion_qa.json`) covering:
+    *   *Technology* (Architecture, Specs)
+    *   *Esports* (Mechanics)
+    *   *History* (Timeline)
+    *   *Research Papers* (Citations)
+
+### 5. Resilience & Fallback
+*   **Hybrid Inference**: The `InferenceEngine` prioritizes the local **Phi-3-mini-4k-instruct-q4_1.gguf**.
+*   **Cloud Fallback**: Automatically hot-swaps to **Google Gemini 2.0 Flash** if local resources (VRAM) are exhausted.
+*   **Persistent Memory**: `AgentState` is serialized to `json`, ensuring conversation continuity across restarts.
+
+### 4. Auto-Evaluation Dataset (Phase 8)
+To objectively measure performance without human bias, we built a synthetic dataset generator using the **Generation-Critique Pipeline**:
+*   **Generator**: `Gemini 2.0 Flash` (via REST) or `Phi-3` (Local Fallback) reads the corpus and creates fact-based Q/A pairs.
+*   **Critique**: A second LLM pass scores each pair (1-5) on "Groundedness" and "Standalone-ness".
+*   **Result**: A "Gold Standard" JSON dataset (`data/project_orion_qa.json`) covering:
+    *   *Technology* (Architecture, Specs)
+    *   *Esports* (Mechanics)
+    *   *History* (Timeline)
+    *   *Research Papers* (Citations)
+
+### 5. Resilience & Fallback
+*   **Hybrid Inference**: The `InferenceEngine` prioritizes the local **Phi-3-mini-4k-instruct-q4_1.gguf**.
+*   **Cloud Fallback**: Automatically hot-swaps to **Google Gemini 2.0 Flash** if local resources (VRAM) are exhausted.
+*   **Persistent Memory**: `AgentState` is serialized to `json`, ensuring conversation continuity across restarts.
 
 ---
 

@@ -1,0 +1,12 @@
+
+    Phase 7: The Omni-Corpus
+    
+    The concept of specific Parent Document Retrieval is crucial for RAG.
+    Here is a specific detail: The key access code for the vault is 998877.
+    
+    This detail is buried in a long paragraph. If we only retrieved the code '998877',
+    we might miss the context that it belongs to 'the vault'.
+    
+    By retrieving this entire parent block, the LLM knows exactly what the code is for.
+    Project Orion also mentioned this technique in section 4.
+    

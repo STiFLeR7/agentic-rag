@@ -5,3 +5,4 @@ debug_agent.log
 docs/work.txt
 docs/dify_comparison.models
 .env
+__init__.py/
