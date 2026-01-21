@@ -2,21 +2,24 @@
 
 ![System Graph](assets/img.png)
 
-## The Problem
+## The Problem: "Silent Failure"
 
-Running reliable, reasoned AI usually demands massive cloud infrastructure (H100s) or accepts high hallucination rates from small local models. **Engineers on constrained hardware (laptops, edge devices) are forced to choose between privacy/autonomy and performance.**
+RAG systems often fail quietly. They return confident hallucinations because dense vector retrieval "smears" precise technical identifiers (like error codes) into generic semantic clusters.
+**Engineers on constrained hardware are usually forced to choose: Privacy/Autonomy OR Performance.**
+
+> *Read the full story on Medium:* [**Most RAG Systems Fail Quietly: How I Built a 98% Accurate Agent on a 6GB GPU**](https://medium.com/@stiflerxd/most-rag-systems-fail-quietly-heres-how-i-built-a-98-accurate-agent-on-a-6gb-gpu-4edc9d05116e)
 
 ## The Solution
 
-**Agentic RAG** is a production-grade system engineered to deliver **98.2% retrieval accuracy** on consumer hardware (specifically RTX 3050 / 6GB VRAM). It rejects "black box" abstractions in favor of a controllable, graph-based architecture that prioritizes reasonability, reliability, and explicit failure handling.
+**Agentic RAG** is a production-grade reasoning engine engineered for **100% recall** on consumer hardware (RTX 3050 / 6GB VRAM). It rejects "black box" abstractions for a controllable, graph-based architecture.
 
-It turns your 6GB VRAM laptop into a **Self-Correcting Research Assistant**.
+It turns your laptop into a **Self-Correcting Research Assistant**.
 
 ## Who Should Care?
 
-* **Edge AI Engineers**: Who need reliable RAG without the cloud latency or cost.
-* **Privacy-Focused Developers**: Who cannot send proprietary data to OpenAI/Anthropic.
-* **Systems Architects**: Who value explicit control flows (StateMachines) over nondeterministic prompts.
+* **Edge Engineers**: reliable RAG without cloud latency.
+* **Privacy Devs**: Zero data egress to OpenAI/Anthropic.
+* **Architects**: Explicit control flows (StateMachines) > Nondeterministic Prompts.
 
 ---
 
