@@ -1,0 +1,39 @@
+# Introduction
+
+Modern Retrieval-Augmented Generation (RAG) systems often **fail quietly**.
+
+They return fluent, confident answers that appear correct — but are factually wrong.
+This is especially dangerous in technical domains, where incorrect answers are hard to detect.
+
+The problem is not the language model.
+
+It is **retrieval collapse**.
+
+## The Silent Failure Problem
+
+Dense vector retrieval optimizes for semantic similarity.
+This works well for natural language, but breaks down for:
+
+- Error codes
+- Configuration keys
+- Function names
+- Hex identifiers and symbols
+
+During embedding, these identifiers are **smoothed into generic semantic space**.
+When retrieval fails, the LLM is forced to hallucinate.
+
+On constrained hardware, engineers are usually pushed into a false choice:
+
+- Cloud models with strong retrieval but no privacy
+- Local models with weak retrieval and silent failure
+
+Agentic RAG rejects this trade-off.
+
+## Design Goal
+
+> **Guarantee recall before generation.**
+
+Agentic RAG is engineered as a controllable reasoning system that runs entirely on
+consumer hardware while preserving correctness.
+
+This documentation explains how that guarantee is achieved.

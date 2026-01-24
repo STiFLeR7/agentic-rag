@@ -1,0 +1,45 @@
+# Omni-Corpus Retrieval
+
+Traditional RAG pipelines fragment context.
+
+Agentic RAG uses **small-to-big retrieval** to preserve both
+precision and narrative completeness.
+
+## The Fragmentation Problem
+
+Standard chunking strategies:
+- Retrieve isolated fragments
+- Drop surrounding context
+- Force the model to infer missing information
+
+This leads to partial answers and subtle hallucinations.
+
+## Parent–Child Chunking Strategy
+
+The corpus is ingested in two layers:
+
+1. **Parent Chunks**
+   - Large semantic units (~2000 characters)
+   - Preserve full conceptual context
+
+2. **Child Chunks**
+   - Smaller searchable units (~400 characters)
+   - Optimized for retrieval
+
+Each child chunk stores a reference to its parent.
+
+## Retrieval Flow
+
+1. Search is performed over child chunks
+2. Top matches identify relevant parents
+3. Full parent context is retrieved for generation
+
+The system retrieves the **needle** but reads the **entire haystack section**.
+
+## Result
+
+- Precise retrieval
+- Complete context
+- No narrative loss
+
+This is critical for correctness in technical explanations.

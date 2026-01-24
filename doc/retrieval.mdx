@@ -1,0 +1,42 @@
+# Hybrid Hyper-Retrieval
+
+Dense-only retrieval is insufficient for technical domains.
+
+Agentic RAG uses a **two-stage hybrid retrieval pipeline**
+designed to maximize recall before optimizing precision.
+
+## Stage 1: Recall Maximization
+
+Two retrievers operate in parallel:
+
+- **BM25 (keyword-based)**  
+  Captures exact identifiers, symbols, and rare tokens.
+
+- **Vector Search (ChromaDB)**  
+  Captures semantic intent and conceptual similarity.
+
+Their results are merged into a single candidate pool.
+
+This stage answers only one question:
+
+> “What should not be missed?”
+
+## Stage 2: Precision Re-Ranking
+
+High recall introduces noise.
+Precision is restored using a **cross-encoder re-ranker**:
+
+- Model: `ms-marco-MiniLM-L-6-v2`
+- Execution: GPU-accelerated
+- Scoring: Pairwise relevance
+
+This stage determines what is actually relevant.
+
+## Why This Works
+
+- BM25 prevents identifier loss
+- Dense vectors preserve semantic breadth
+- Cross-encoders restore ranking accuracy
+
+The result is **100% recall with controlled precision**
+on consumer hardware.

@@ -1,0 +1,22 @@
+{
+  "name": "Agentic RAG",
+  "navigation": [
+    {
+      "group": "Overview",
+      "pages": ["index", "introduction"]
+    },
+    {
+      "group": "System Design",
+      "pages": [
+        "architecture",
+        "retrieval",
+        "omni-corpus",
+        "self-correction"
+      ]
+    },
+    {
+      "group": "Evaluation",
+      "pages": ["evaluation"]
+    }
+  ]
+}

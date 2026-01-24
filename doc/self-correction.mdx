@@ -1,0 +1,46 @@
+# Automated Self-Correction
+
+Small local models struggle under uncertainty.
+
+Agentic RAG treats self-correction as a **first-class system behavior**
+instead of a prompt trick.
+
+## Reflection as a System Node
+
+After each generation step, the system evaluates:
+
+- Retrieval confidence
+- Evidence coverage
+- Answer completeness
+
+If confidence falls below a threshold, execution halts.
+
+## Query Rewriting
+
+When retrieval fails, the agent rewrites the query:
+
+- Ambiguous language is removed
+- Technical identifiers are inferred
+- Search intent is sharpened
+
+Example:
+
+- Original: “Why did it fail?”
+- Rewritten: “QTP-X configuration failure modes”
+
+## Controlled Retry Loop
+
+The system then:
+1. Re-enters retrieval
+2. Expands or refines context
+3. Regenerates with stronger evidence
+
+Retries are bounded and observable.
+
+## Why This Matters
+
+Failures become recoverable states —
+not silent exits.
+
+This transforms the model from a passive generator
+into an active reasoning agent.

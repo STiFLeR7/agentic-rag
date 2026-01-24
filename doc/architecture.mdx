@@ -1,0 +1,49 @@
+# System Architecture
+
+Agentic RAG is not a prompt chain.
+It is a **graph-based reasoning engine**.
+
+Instead of implicit prompt behavior, the system uses **explicit control flow**
+modeled as a StateMachine.
+
+![Agentic RAG System Overview](images/hero-dark.png)
+
+## Why Graph-Based Control
+
+Prompt-only pipelines fail because:
+
+1. Control flow is implicit and uninspectable
+2. Error handling is probabilistic
+3. Recovery logic is mixed with generation
+
+Agentic RAG separates concerns.
+
+Each reasoning step is implemented as a **node** with:
+- Defined inputs
+- Defined outputs
+- Explicit failure conditions
+
+Edges define allowed transitions — not suggestions.
+
+## Execution Loop
+
+At a high level, the system operates as:
+
+1. Interpret user intent
+2. Perform recall-oriented retrieval
+3. Validate retrieval confidence
+4. Expand context if required
+5. Generate an answer
+6. Reflect on correctness
+7. Retry if confidence is insufficient
+
+This loop continues until the system reaches a stable, high-confidence state.
+
+## Determinism Over Prompt Magic
+
+By externalizing control flow:
+- Failures become observable
+- Recovery becomes systematic
+- Behavior becomes debuggable
+
+This architecture is what enables reliable RAG on small local models.
