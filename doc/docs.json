@@ -1,23 +1,33 @@
 {
   "name": "Agentic RAG",
   "theme": "mint",
-  "navigation": [
-    {
-      "group": "Overview",
-      "pages": ["index", "introduction"]
-    },
-    {
-      "group": "System Design",
-      "pages": [
-        "architecture",
-        "retrieval",
-        "omni-corpus",
-        "self-correction"
-      ]
-    },
-    {
-      "group": "Evaluation",
-      "pages": ["evaluation"]
-    }
-  ]
+  "colors": {
+    "primary": "#10B981"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Overview",
+        "pages": [
+          "index",
+          "introduction"
+        ]
+      },
+      {
+        "group": "System Design",
+        "pages": [
+          "architecture",
+          "retrieval",
+          "omni-corpus",
+          "self-correction"
+        ]
+      },
+      {
+        "group": "Evaluation",
+        "pages": [
+          "evaluation"
+        ]
+      }
+    ]
+  }
 }
