@@ -1,5 +1,6 @@
 {
   "name": "Agentic RAG",
+  "theme": "mint",
   "navigation": [
     {
       "group": "Overview",
