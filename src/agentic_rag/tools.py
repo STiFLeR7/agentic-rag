@@ -3,6 +3,7 @@ from typing import Protocol, Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 import os
 from agentic_rag.retriever import Retriever
+from agentic_rag.llm import InferenceEngine
 
 class Tool(Protocol):
     name: str
@@ -34,7 +35,15 @@ class SearchKnowledgeBaseTool:
         # Format results for the agent
         formatted = []
         for i, res in enumerate(results, 1):
-            formatted.append(f"Result {i} (Score: {res['score']}):\n{res['content']}")
+            is_image = res['metadata'].get('is_image', False)
+            image_path = res['metadata'].get('image_path', 'N/A')
+            type_str = "[IMAGE]" if is_image else "[TEXT]"
+            
+            chunk_info = f"Result {i} {type_str} (Score: {res['score']}):\n{res['content']}"
+            if is_image:
+                chunk_info += f"\nNote: This is an image location: {image_path}. Use 'examine_image' to see it."
+            
+            formatted.append(chunk_info)
         return "\n\n".join(formatted)
 
 class ReadFileTool:
@@ -92,6 +101,28 @@ class PythonCodeTool:
             return output.getvalue().strip() or "Success (No Output)"
         except Exception as e:
             return f"Error: {e}"
+
+class ExamineImageTool:
+    name = "examine_image"
+    description = "Analyzes an image and provides a text description. Use this on images found in search_knowledge_base."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "image_path": {"type": "string", "description": "Absolute path to the image file."},
+            "question": {"type": "string", "description": "Specific question about the image (optional)."}
+        },
+        "required": ["image_path"]
+    }
+
+    def __init__(self, llm: InferenceEngine):
+        self.llm = llm
+
+    def execute(self, image_path: str, question: str = "Describe this image in detail.") -> str:
+        if not os.path.exists(image_path):
+            return f"Error: Image not found at {image_path}"
+        
+        print(f"Agent is examining image: {image_path}")
+        return self.llm.vision_analyze(image_path, question)
 
 # Simple registry
 class ToolRegistry:

@@ -1,20 +1,20 @@
-
-from typing import List, Dict
+from typing import List, Dict, Optional
 from agentic_rag.vector_store import VectorStore
+from agentic_rag.embedding import CLIPEmbeddingFunction
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 import torch
 
 class Retriever:
     """
-    Hybrid Retriever: BM25 + Vector Search + Cross-Encoder Re-ranking.
+    Hybrid Multi-Modal Retriever: BM25 + Vector (CLIP) + Cross-Encoder.
     """
-    def __init__(self, vector_store: VectorStore, device: str = 'cuda'):
+    def __init__(self, vector_store: VectorStore, embedding_function: Optional[CLIPEmbeddingFunction] = None, device: str = 'cuda'):
         self.vector_store = vector_store
+        self.ef = embedding_function
         
         # 1. Initialize BM25 (In-Memory)
-        # Fetch all docs from Vector Store (Assumption: Corpus fits in RAM)
-        print("Initializing Hybrid Retriever...")
+        print("Initializing Hybrid Multi-Modal Retriever...")
         self.docs = self.vector_store.get_all_docs()
         if self.docs:
             tokenized_corpus = [doc.split(" ") for doc in self.docs]
@@ -22,73 +22,77 @@ class Retriever:
             print(f"BM25 Index built with {len(self.docs)} documents.")
         else:
             self.bm25 = None
-            print("Warning: Vector Store empty. BM25 not initialized.")
 
         # 2. Initialize Cross-Encoder (Re-ranker)
-        # We use a small, fast model. 
-        # Using 'ms-marco-MiniLM-L-6-v2' (Standard for RAG).
         if torch.cuda.is_available() and device == 'cuda':
-            print("Loading Re-ranker on GPU (CUDA)...")
             self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
         else:
-             print("Loading Re-ranker on CPU...")
-             self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cpu')
+            self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cpu')
 
 
     def retrieve(self, query: str, top_k: int = 3, use_hybrid: bool = True, use_rerank: bool = True) -> List[Dict]:
         """
-        Hybrid Retrieval Process:
-        1. Get Top-K from Vector Store (Semantic).
-        2. Get Top-K from BM25 (Keyword) [Optional].
+        Hybrid Multi-Modal Retrieval Process:
+        1. Get Top-K from Vector Store (Semantic CLIP).
+        2. Get Top-K from BM25 (Keyword).
         3. Merge & Deduplicate.
-        4. Re-rank with Cross-Encoder [Optional].
-        5. Return Top-K.
+        4. Re-rank with Cross-Encoder.
+        5. Return Top-K assets.
         """
-        # A. Vector Search
-        raw_vector_results = self.vector_store.query(query, n_results=top_k * 2) # Fetch more for re-ranking
-        vector_docs = []
+        # A. Vector Search (CLIP)
+        query_emb = None
+        if self.ef:
+            query_emb = self.ef.encode_text([query])
+            
+        raw_vector_results = self.vector_store.query(query_text=query, query_embeddings=query_emb, n_results=top_k * 2)
+        
+        vector_assets = []
         if raw_vector_results['documents']:
-            vector_docs = raw_vector_results['documents'][0]
+            for i in range(len(raw_vector_results['documents'][0])):
+                vector_assets.append({
+                    "content": raw_vector_results['documents'][0][i],
+                    "metadata": raw_vector_results['metadatas'][0][i],
+                    "id": raw_vector_results['ids'][0][i]
+                })
 
-        # B. BM25 Search
-        bm25_docs = []
+        # B. BM25 Search (Keyword)
+        bm25_assets = []
         if use_hybrid and self.bm25:
             tokenized_query = query.split(" ")
-            bm25_docs = self.bm25.get_top_n(tokenized_query, self.docs, n=top_k * 2)
+            # Note: BM25 only has access to document text, not full asset dicts.
+            # We'll map back or just use the text.
+            top_bm25_texts = self.bm25.get_top_n(tokenized_query, self.docs, n=top_k * 2)
+            for text in top_bm25_texts:
+                bm25_assets.append({"content": text, "metadata": {"source": "bm25"}, "id": "bm25"})
 
-        # C. Merge
-        candidates = set(vector_docs + bm25_docs)
-        if not use_hybrid:
-             candidates = set(vector_docs) # Fallback to just vector
+        # C. Merge & Deduplicate by content
+        seen = set()
+        candidates = []
+        for asset in vector_assets + bm25_assets:
+            if asset['content'] not in seen:
+                candidates.append(asset)
+                seen.add(asset['content'])
         
         if not candidates:
             return []
 
-        candidate_list = list(candidates)
-        
-        # D. Re-Ranking
-        if use_rerank:
-            pairs = [[query, doc] for doc in candidate_list]
+        # D. Re-Ranking (On Text Context)
+        if use_rerank and candidates:
+            pairs = [[query, asset['content']] for asset in candidates]
             scores = self.cross_encoder.predict(pairs)
-            scored_results = sorted(zip(candidate_list, scores), key=lambda x: x[1], reverse=True)
+            scored_results = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
             final_top_k = scored_results[:top_k]
         else:
-            # If no rerank, we don't have good scores for the mixed set.
-            # Just return top K from vector portion or random if mixed?
-            # Ideally, without rerank, hybrid is hard to sort.
-            # So if use_rerank=False, we assume Vector Only usually.
-            # But if hybrid is true and rerank is false, we'll just take vector docs first then bm25.
-            final_top_k = [(doc, 0.0) for doc in list(candidates)[:top_k]]
+            final_top_k = [(asset, 0.0) for asset in candidates[:top_k]]
         
-        # Format
+        # E. Format
         parsed_results = []
-        for i, (content, score) in enumerate(final_top_k):
-            # We don't have metadata for BM25 hits easily unless we map back.
-            # For the demo, we construct a generic result.
-            parsed_results.append({
-                "content": content,
-                "metadata": {"source": "hybrid"},
-                "score": float(score) # numpy float to python float
-            })
+        for asset, score in final_top_k:
+            result = {
+                "content": asset['content'],
+                "metadata": asset['metadata'],
+                "score": float(score)
+            }
+            parsed_results.append(result)
             
         return parsed_results

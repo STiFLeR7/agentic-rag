@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from llama_cpp import Llama
 from dotenv import load_dotenv
 
-load_dotenv("d:/agentic-rag/.env")
+load_dotenv("d:/agentic-rag/.env", override=True)
 
 class InferenceEngine:
     """
@@ -75,14 +75,54 @@ class InferenceEngine:
             self.use_fallback = True
             return self._chat_gemini(messages, **kwargs)
 
+    def vision_analyze(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
+        """
+        Analyzes an image using Gemini (Vision).
+        """
+        if not self.gemini_key:
+            return "Error: No Gemini API Key for Vision Analysis."
+            
+        import base64
+        try:
+            with open(image_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+        except Exception as e:
+            return f"Error reading image: {e}"
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_key}"
+        
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/png" if image_path.endswith(".png") else "image/jpeg",
+                            "data": img_data
+                        }
+                    }
+                ]
+            }]
+        }
+
+        try:
+            response = requests.post(url, headers={"Content-Type": "application/json"}, json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                if "candidates" in data and data["candidates"]:
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+            return f"Error Gemini Vision {response.status_code}: {response.text}"
+        except Exception as e:
+            return f"Error calling Gemini Vision: {e}"
+
     def _chat_gemini(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """
-        Uses Gemini via REST API (v1beta) targeting gemini-2.0-flash-exp.
+        Uses Gemini via REST API (v1beta) targeting gemini-1.5-flash.
         """
         if not self.gemini_key:
              return {"choices": [{"message": {"content": "Error: No Gemini API Key"}}]}
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={self.gemini_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_key}"
         
         # Convert messages to Gemini Content
         contents = []
