@@ -25,7 +25,16 @@ It turns your laptop into a **Self-Correcting Research Assistant**.
 
 ## ⚡ Leverage (Technical Highlights)
 
-This system is not just a wrapper around a model. It is a **Reasoning Engine** built on three pillars of leverage:
+This system is not just a wrapper around a model. It is a **Reasoning Engine** built on four pillars of leverage:
+
+### 0. Multi-Modal Intelligence (V2)
+
+In V2, the system extracts and reasons over **Images and Diagrams** within technical documentation:
+
+* **Ingestion**: Uses `PyMuPDF` to extract visual assets and anchor them to relevant text.
+* **Embeddings**: Uses **CLIP** (`clip-ViT-B-32`) to search across both text and visuals in a single vector space.
+* **Vision Reasoning**: The Agent calls a Vision-Language Model (Gemini fallback) via the `examine_image` tool to describe retrieved diagrams.
+* **Recall**: 62.5% Accuracy on zero-shot visual reasoning tests.
 
 ### 1. Hybrid Hyper-Retrieval (100% Recall)
 
@@ -60,9 +69,11 @@ Small models (3B params) often struggle with instruction following. We explicitl
 | Metric | Value | Hardware Context |
 | :--- | :--- | :--- |
 | **Model** | Phi-3-mini-4k (3.8B) | 4-bit Quantized |
-| **Accuracy** | **98.2%** | vs 0% Baseline (Hallucination) |
+| **Accuracy (Text)** | **98.2%** | vs 0% Baseline (Hallucination) |
+| **Accuracy (Vision)** | **62.5%** | Inaugural V2 Benchmarks |
 | **Recall** | **100%** | On Technical Domain Data |
-| **Cost** | **$0.00** | 100% Local Inference |
+| **Latency** | **~5.8s** | Multi-modal Reasoning Loop |
+| **Cost** | **$0.00** | 100% Local Inference (Text/CLIP) |
 
 ![Baseline vs RAG](docs/metrics_neon_line.png)
 

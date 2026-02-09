@@ -1,16 +1,20 @@
-
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Optional
 import os
 import uuid
 import json
+from agentic_rag.embedding import CLIPEmbeddingFunction
 
 class VectorStore:
-    def __init__(self, collection_name: str = "agentic_rag_docs", persist_directory: str = "d:/agentic-rag/data/chroma"):
+    def __init__(self, collection_name: str = "agentic_rag_docs", persist_directory: str = "d:/agentic-rag/data/chroma", embedding_function: Optional[CLIPEmbeddingFunction] = None):
         self.persist_directory = persist_directory
         self.client = chromadb.PersistentClient(path=persist_directory)
-        self.collection = self.client.get_or_create_collection(name=collection_name)
+        self.ef = embedding_function
+        self.collection = self.client.get_or_create_collection(
+            name=collection_name, 
+            embedding_function=self.ef
+        )
         
         # Simple Key-Value Store for Parent Docs (JSON backed)
         self.doc_store_path = os.path.join(persist_directory, "doc_store.json")
@@ -30,11 +34,12 @@ class VectorStore:
         """
         Adds pre-processed chunks (from Ingestor) to appropriate stores.
         - Parents -> JSON Doc Store
-        - Children -> ChromaDB
+        - Children -> ChromaDB (with CLIP support)
         """
         vector_docs = []
         vector_ids = []
         vector_metas = []
+        vector_embeddings = []
         
         new_parents = 0
         
@@ -45,9 +50,23 @@ class VectorStore:
                 new_parents += 1
             else:
                 # Prepare Child for Vector
+                # We normalize metadata to ensure keys like 'is_image' exist
+                meta = chunk["metadata"]
+                meta["is_image"] = chunk.get("is_image", False)
+                
+                # Handle Multi-Modal Embeddings
+                if self.ef:
+                    if meta["is_image"]:
+                        # Embed the actual image
+                        embedding = self.ef.encode_images([meta["image_path"]])[0]
+                    else:
+                        # Embed the text
+                        embedding = self.ef.encode_text([chunk["text"]])[0]
+                    vector_embeddings.append(embedding)
+                
                 vector_docs.append(chunk["text"])
                 vector_ids.append(chunk["id"])
-                vector_metas.append(chunk["metadata"])
+                vector_metas.append(meta)
                 
         # Save Parents
         if new_parents > 0:
@@ -56,11 +75,15 @@ class VectorStore:
             
         # Save Children
         if vector_docs:
-            self.collection.add(
-                documents=vector_docs,
-                metadatas=vector_metas,
-                ids=vector_ids
-            )
+            add_kwargs = {
+                "documents": vector_docs,
+                "metadatas": vector_metas,
+                "ids": vector_ids
+            }
+            if vector_embeddings:
+                add_kwargs["embeddings"] = vector_embeddings
+                
+            self.collection.add(**add_kwargs)
             print(f"Added {len(vector_docs)} Child Documents to ChromaDB")
 
     def get_parent_content(self, child_meta: Dict) -> Optional[str]:
@@ -89,14 +112,19 @@ class VectorStore:
         )
         print(f"Added {len(documents)} documents to collection '{self.collection.name}'")
 
-    def query(self, query_text: str, n_results: int = 3) -> Dict:
+    def query(self, query_text: Optional[str] = None, n_results: int = 3, query_embeddings: Optional[List[List[float]]] = None) -> Dict:
         """
-        Query the vector store.
+        Query the vector store. Supports either text or pre-computed embeddings.
         """
-        results = self.collection.query(
-            query_texts=[query_text],
-            n_results=n_results
-        )
+        kwargs = {"n_results": n_results}
+        if query_embeddings:
+            kwargs["query_embeddings"] = query_embeddings
+        elif query_text:
+            kwargs["query_texts"] = [query_text]
+        else:
+            raise ValueError("Must provide either query_text or query_embeddings")
+
+        results = self.collection.query(**kwargs)
         return results
 
     def count(self) -> int:
@@ -107,7 +135,10 @@ class VectorStore:
         Dangerous: clears all data in collection.
         """
         self.client.delete_collection(self.collection.name)
-        self.collection = self.client.get_or_create_collection(self.collection.name)
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection.name,
+            embedding_function=self.ef
+        )
         self.doc_store = {}
         if os.path.exists(self.doc_store_path):
             os.remove(self.doc_store_path)

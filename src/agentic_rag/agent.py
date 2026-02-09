@@ -137,32 +137,51 @@ Rewritten: "What is the current status of Project Orion?"
     def call_model(self, state: AgentState) -> Dict:
         messages = state['messages']
         
-        # Convert LangChain messages to ChatML format for local LLM
-        # This is the "Adapter" layer
-        formatted_messages = []
-        # specific handling: if first message is not system, add system
-        if not isinstance(messages[0], SystemMessage):
-             formatted_messages.append({"role": "system", "content": self.system_prompt})
+        # Build raw prompt for Phi-3
+        prompt = ""
         
+        # 1. System Prompt
+        sys_msg = next((m.content for m in messages if isinstance(m, SystemMessage)), self.system_prompt)
+        prompt += f"<|system|>\n{sys_msg}<|end|>\n"
+        
+        # 2. Conversation History
         for m in messages:
-            if isinstance(m, SystemMessage):
-                formatted_messages.append({"role": "system", "content": m.content})
-            elif isinstance(m, HumanMessage):
-                formatted_messages.append({"role": "user", "content": m.content})
+            if isinstance(m, HumanMessage):
+                prompt += f"<|user|>\n{m.content}<|end|>\n"
             elif isinstance(m, AIMessage):
-                formatted_messages.append({"role": "assistant", "content": m.content})
-            # We treat Tool output as User message "Observation: ..." in this specific local LLM prompting strategy
-            # If we had a "ToolMessage", we would convert it too.
+                prompt += f"<|assistant|>\n{m.content}<|end|>\n"
+                
+        # 3. Final trigger
+        prompt += "<|assistant|>\n"
             
-        print(f"--- Calling LLM with {len(formatted_messages)} messages ---")
-            
-        response = self.llm.chat(
-            formatted_messages,
-            stop=["Observation:"],
-            temperature=0.0
-        )
-        content = response['choices'][0]['message']['content'].strip()
+        print(f"--- Calling LLM with explicit Phi-3 format ---")
+        
+        # We call InferenceEngine.llm.create_completion directly for raw prompt control
+        # or use InferenceEngine.chat if updated to handle strings.
+        # For precision, let's use the underlying llm object if available and not in fallback.
+        
+        if self.llm.use_fallback:
+             # Fallback (Gemini) still uses the list-based chat
+             formatted_messages = []
+             if not isinstance(messages[0], SystemMessage):
+                 formatted_messages.append({"role": "system", "content": self.system_prompt})
+             for m in messages:
+                 role = "user" if isinstance(m, HumanMessage) else "assistant" if isinstance(m, AIMessage) else "system"
+                 formatted_messages.append({"role": role, "content": m.content})
+             response = self.llm.chat(formatted_messages, stop=["Observation:"], temperature=0.0)
+             content = response['choices'][0]['message']['content'].strip()
+        else:
+            # Local Phi-3
+            res = self.llm.llm.create_completion(
+                prompt=prompt,
+                max_tokens=1024,
+                stop=["<|end|>", "Observation:", "Observation Index:"],
+                temperature=0.0
+            )
+            content = res['choices'][0]['text'].strip()
+
         print(f"LLM Output:\n{content}")
+        logging.info(f"LLM Output: {content}")
         
         return {"messages": [AIMessage(content=content)]}
 
@@ -217,12 +236,16 @@ Rewritten: "What is the current status of Project Orion?"
                 except:
                     tool_input = raw_input.strip('"')
 
-                # Robustness mapping
+                tool = self.tools.get(tool_name)
+                
+                # Robustness mapping for non-dict inputs
                 if not isinstance(tool_input, dict):
                         if tool_name == "search_knowledge_base":
                             tool_input = {"query": str(tool_input)}
                         elif tool_name == "read_file":
                             tool_input = {"file_path": str(tool_input)}
+                        elif tool_name == "examine_image":
+                            tool_input = {"image_path": str(tool_input)}
 
                 if tool:
                     print(f"Executing {tool_name} with {tool_input}...")
@@ -243,6 +266,7 @@ Rewritten: "What is the current status of Project Orion?"
                 observation = f"Error: {e}"
         
         print(f"Observation: {observation}")
+        logging.info(f"Tool Observation: {observation}")
         # Return as HumanMessage to prompt next step
         return {"messages": [HumanMessage(content=f"Observation: {observation}")]}
 
@@ -262,6 +286,8 @@ Rewritten: "What is the current status of Project Orion?"
         
         # Execute Graph
         config = {"recursion_limit": max_steps * 2} # *2 because distinct User/Asst steps
+        # Run with recursion limit
+        config = {"recursion_limit": 40}
         try:
             final_state = self.graph.invoke(inputs, config=config)
             
